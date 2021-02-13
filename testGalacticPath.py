@@ -4,8 +4,11 @@ import time
 import numpy as np
 import math
 #import cscore
-from cscore import CameraServer
-#Have to fix Cscore import issue using RoboRio soon
+import cscore
+from networktables import NetworkTables
+import logging
+import nt
+
 
 
 time.sleep(5)
@@ -62,7 +65,8 @@ CalibrationDistanceInch = 16.0
 DefaultCameraViewangle = 36
 ###HeightOfCamera = ?
 #Don't know the above value yet, so have to as the build team
-###CameraMountingAngleRadians = (Have to calculate in radians so remember to np.pi/180)
+###CameraMountingAngleRadians = (Have to calculate in radians so remember to np.pi/180) Placeholder below
+CameraMountingAngleRadians=0
 ###
 MaxPossibleAngle = 60 #Degrees
 MaxPossibleDistance = 120 #Inches
@@ -70,8 +74,8 @@ MaxPossibleDistance = 120 #Inches
 #Setting up variables for distance calculations
 MaxPossibleRadius = (DefaultImageHeight / 2) #MEASURED IN INCHES 
 MinPossibleRadius = 0   #WE NEED TO CALCULATE THIS
-DefaultPixelsPerInch = (DefaultImageHeight/2)/(math.tan((DefaultCameraViewAngle/2) * (np.pi/180)) * CalibrationDistanceInch)
-DefaultBallHeightPixel = DefaultBallRadiusInch/(math.tan((DefaultCameraViewAngle/2) * (np.pi/180)) * CalibrationDistanceInch) * DefaultImageHeight
+DefaultPixelsPerInch = (DefaultImageHeight/2)/(math.tan(float(DefaultCameraViewAngle /2) * (np.pi/180)) * CalibrationDistanceInch)
+DefaultBallHeightPixel = DefaultBallRadiusInch/(math.tan(float(DefaultCameraViewAngle /2) * (np.pi/180)) * CalibrationDistanceInch) * DefaultImageHeight
 
 #Maximum and minimum possible HSV values to detect the ball
 minHSVBall = np.array([20, 76, 55])
@@ -328,5 +332,5 @@ def Vision():
 
 
 while True:
-    #time.sleep(2)
+    time.sleep(2)
     Vision()

@@ -1,9 +1,12 @@
+#For Autonomous vision and ball detection
 import cv2
 import time
 import numpy as np
 import math
 #import cscore
 from cscore import CameraServer
+#Have to fix Cscore import issue using RoboRio soon
+
 
 time.sleep(5)
 
@@ -123,7 +126,7 @@ def Vision():
     #Increment this counter so that changing values represent working vision
     VisionCounter += 1
 
-    #If getting camera feed from network table is an issue then default to using front camera
+    #If getting camera feed from network table is an issue then switch to front camera
     try:
         # Reset the amount of times the program has not gotten the ball
         getNewBall = 0
@@ -141,7 +144,7 @@ def Vision():
         SmartDashboard.putString("VisionCodeSelected", "0")
     except:
         print("Cannot put string because network table was not found")
-        logging.warning("Network Tables not found")
+        logging.warning("Tables not found")
 
     #Creating an opencv sink 
     cvSink = cscore.CvSink("cvsink")
@@ -152,15 +155,15 @@ def Vision():
 
     img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
-    #Convert the RGB image to HSV
+    #Convert the RGB image to HSV since we are using HSV to detect the ball
     imHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    #Find pixels that represent the ball and makes it white, everything else becomes black                                         
+    #Pixels that represent the ball are made into a white color, whereas everything else becomes black                                      
     InRange = cv2.inRange(imHSV, minHSVBall, maxHSVBall)
 
-    #Blurring so that the sharp edges of the pixels of the rendered ball bcome smoother, hence easier for the robot to detect
+    #Blurring so sharp pixel edges get curved, making it easier for the robot to detect
     InRange = cv2.GaussianBlur(InRange, (5, 5), cv2.BORDER_DEFAULT)
 
-    # Hough circle transformation looks in InRange file to find circles given the parameters below
+    # uses InRange values and these parameters to determine what the ball is and what isn't
     circles = cv2.HoughCircles(InRange, cv2.HOUGH_GRADIENT, 1, int(width/10), param1=180, param2=10, minRadius=5, maxRadius=50)
    
     try:
@@ -172,14 +175,158 @@ def Vision():
         repeatPolyFit = 0
         logging.warning("No ball was found at this time")
 
+    
+    if runCalculation:
+        global biggest_radius
+        global biggestX
+        global biggestY
+        global startTime
+        biggest_radius = 0
+        for i in circles[0,:]:
+            try:
+
+                if (biggest_radius < i[2]):
+                    biggest_radius = i[2]
+                    biggestX = i[0]
+                    biggestY = i[1]
+
+                if saveImage:
+                    if(imageCounter % 150 == 0):
+                        # Mark circumference of ball on image
+                        cv2.circle(img,(biggestX,biggestY),biggest_radius,(0,255,0),2)
+                        # mark center of circle
+                        cv2.circle(img, (biggestX,biggestY),2,(0,0,255),3)
+
+            except IndexError:
+                #If no ball in array
+                print("No ball found")
+                logging.warning("No values in the hough circle array")
+         # Flag for saving images
+        if saveImage:
+            if(imageCounter % 150 == 0):
+                filename = "Image%d-%d.jpg" % (MatchNumber, imageCounter)
+                cv2.imwrite(filename, img)
+                msgFilewrite = "Look at %s" % filename
+                logging.info(msgFilewrite)
+            
+        #Calculations to determine distance from the balls
+        #This will be the backup plan to determine which path we will use if just the imaging does not work
+        ActualBallHeightPixel = DefaultBallHeightPixel / (DefaultImageHeight / height)
+        ActualPixelsPerInch = DefaultPixelsPerInch / (DefaultImageHeight / height)
+
+        DirectDistanceBallInch = ((ActualBallHeightPixel / (2 * biggest_radius)) * CalibrationDistanceInch)
+        XDisaplacementPixel = biggestX - (width / 2)
+        YDisplacmentPixel = biggestY - (height / 2)
+        YAngle = math.atan(YDisplacmentPixel/(ActualPixelsPerInch * DefaultPixelsPerInch)) #MEASURED IN RADIANS
+
+        XAngle = math.atan(XDisaplacementPixel/(ActualPixelsPerInch * DefaultPixelsPerInch)) * (180/np.pi) #MEASURED IN DEGREES
+
+        ZDistance = DirectDistanceBallInch * math.cos((CameraMountingAngleRadians - YAngle))
+        
+        
+        """
+        EXTREMELY OVERSIMPLIFIED psuedocode
+
+        if ZDistance>= some value
+        run the red path (hardcoded here)
+
+        else 
+        run blue path
+        """
+
+        
+        #Calculate the relative end time which is NOW
+        relativeEndTime = time.time()
+        #Subtract to find how many seconds have passed since we found the start time
+        timeLapsed = relativeEndTime - startTime
+        #Automatically set that we are not ready for any prediction
+        readyForPrediction = False
+
+         #run the following code if we have missed less than 4 balls
+        if(getNewBall < 3):
+            #Fill the array 6 times for each x and y value of the 3 balls in the path
+            if(repeatPolyFit < 6):
+                #Add distance and angle values to the smoothening class
+                SmoothDistance.AddValue("Y", repeatPolyFit, ZDistance)
+                SmoothDistance.AddValue("X", repeatPolyFit, timeLapsed)
+                SmoothAngle.AddValue("Y", repeatPolyFit, XAngle)
+                SmoothAngle.AddValue("X", repeatPolyFit, timeLapsed)
+                #Increment since we have a value now
+                repeatPolyFit += 1
+            else:
+                #If we have filled the array, then we are ready for prediction
+                readyForPrediction = True
+                print("We are ready to predict where the ball is")
+
+            if(readyForPrediction):
+                #Get a prediction from the smoothen class
+                answer = SmoothDistance.ReturnPrediction()
+                answerAngle = SmoothAngle.ReturnPrediction()
+                print("ZDistance = " + str(ZDistance))
+                msgRawDistance = "RawDistance: %d" % ZDistance
+                logging.info(msgRawDistance)
+                print("XAngle = " + str(XAngle))
+                msgRawAngle = "RawAngle: %d" % XAngle
+                logging.info(msgRawAngle)
+                print("PredtionDistance = " + str(answer))
+                print("PredictionAngle = " + str(answerAngle))
+
+                #Determining the X, Y and Z distances and/or angles in order to test against our predictons
+                if (abs(ZDistance - answer) < 6.56 ):
+                    SmoothDistance.AppendValues("Y", ZDistance)
+                    ZDistance = answer
+                    endTime = time.time()
+                    elapsedTime = endTime - startTime
+                    print("FeedingTime = " + str(elapsedTime))
+                    SmoothDistance.AppendValues("X", elapsedTime)
+                elif (abs(ZDistance - answer) > 6.56 ):
+                    getNewBall += 1
+                    answer = 0
+                    SmoothDistance.AppendValues("Y", ZDistance)
+                    endTime = time.time()
+                    elapsedTime = endTime - startTime
+                    SmoothDistance.AppendValues("X", elapsedTime)
+                elif (abs(XAngle - answerAngle) < 2.0):
+                    SmoothAngle.AppendValues("Y", XAngle)
+                    XAngle = answerAngle
+                    endTime = time.time()
+                    elapsedTime = endTime - startTime
+                    SmoothAngle.AppendValues("X", elapsedTime)
 
 
+            elif (abs(ZDistance - answer) > 2.0 ):
+                getNewBall += 1
+                answer = 0
+                SmoothAngle.AppendValues("Y", XAngle)
+                endTime = time.time()
+                elapsedTime = endTime - startTime
+                SmoothAngle.AppendValues("X", elapsedTime)
+        elif (getNewBall == 4):
+            repeatPolyFit = 0
+            getNewBall = 0
+            ZDistance = 0
+            XAngle = 0
+            startTime = time.time()
+                
+            SmartDashboard.putNumber("ZDistance", ZDistance)
+            msgDistance = "Predicted distance: %d" % ZDistance
+            logging.info(msgDistance)
+            SmartDashboard.putNumber("XAngle", XAngle)
+            msgAngle = "XAngle: %d" % XAngle
+            logging.info(msgAngle)
+
+        else:
+            print("could not find any object so decided to skip calculations as well")
+            ZDistance = 0
+            XAngle = 0
+            SmartDashboard.putNumber("ZDistance", ZDistance)
+            print("ZDistance = " + str(ZDistance))
+            SmartDashboard.putNumber("XAngle", XAngle)
+            print("XAngle = " + str(XAngle))
+                
+        print("The time it took " + str(time.time()-t0))
 
 
-
-
-
-
-
-
-
+while True:
+    #time.sleep(2)
+    Vision()

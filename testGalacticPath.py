@@ -56,20 +56,19 @@ setupFrontCamera()
 
 #Hardcoding camera width and height
 camWid = 640
-camHgt = 480
+camHgt = 480 #352 
 
 #variables to perform distance calculations
 DefaultImageHeight = 240 
 DefaultBallRadiusInch = 3.50
 CalibrationDistanceInch = 16.0
-DefaultCameraViewangle = 36
+DefaultCameraViewangle = 36 # have to test and modify
 ###HeightOfCamera = ?
 #Don't know the above value yet, so have to as the build team
 ###CameraMountingAngleRadians = (Have to calculate in radians so remember to np.pi/180) Placeholder below
-CameraMountingAngleRadians=0
 ###
 MaxPossibleAngle = 60 #Degrees
-MaxPossibleDistance = 120 #Inches
+MaxPossibleDistance = 120.0 #Inches
 
 #Setting up variables for distance calculations
 MaxPossibleRadius = (DefaultImageHeight / 2) #MEASURED IN INCHES 
@@ -141,7 +140,7 @@ def Vision():
     except:
         getNewBall = 0
         runCalculation = True
-        print("Couldn't get cameraFeed value because no network table was found\nDefault to 0")
+        print("Couldn't get cameraFeed value because no network table was found \n Default to 0")
 
     #If network tables is causing issue then report it
     try:
@@ -246,10 +245,10 @@ def Vision():
         #Automatically set that we are not ready for any prediction
         readyForPrediction = False
 
-         #run the following code if we have missed less than 4 balls
-        if(getNewBall < 3):
+         #run the following code if we have missed less than 3 balls
+        if(getNewBall < 2):
             #Fill the array 6 times for each x and y value of the 3 balls in the path
-            if(repeatPolyFit < 6):
+            if(repeatPolyFit < 4):
                 #Add distance and angle values to the smoothening class
                 SmoothDistance.AddValue("Y", repeatPolyFit, ZDistance)
                 SmoothDistance.AddValue("X", repeatPolyFit, timeLapsed)

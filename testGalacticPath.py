@@ -3,11 +3,13 @@ import cv2
 import time
 import numpy as np
 import math
-#import cscore
 import cscore
 from networktables import NetworkTables
 import logging
 import nt
+import wpilib
+import wpilib.drive
+import ctre
 
 
 
@@ -63,9 +65,9 @@ DefaultImageHeight = 240
 DefaultBallRadiusInch = 3.50
 CalibrationDistanceInch = 16.0
 DefaultCameraViewangle = 36 # have to test and modify
-###HeightOfCamera = ?
+HeightOfCamera = 18
 #Don't know the above value yet, so have to as the build team
-###CameraMountingAngleRadians = (Have to calculate in radians so remember to np.pi/180) Placeholder below
+CameraMountingAngleRadians = 0.5 ###(Have to calculate in radians so remember to np.pi/180) Placeholder below
 ###
 MaxPossibleAngle = 60 #Degrees
 MaxPossibleDistance = 120.0 #Inches
@@ -110,6 +112,22 @@ startTime = time.time()
 SmoothDistance = SmoothenClass(1)
 #Smoothening class which takes the order as a perimeter - SMOOTHING ANGLE
 SmoothAngle = SmoothenClass(1)
+
+class MyRobot(wpilib.TimedRobot):
+
+
+    def robotInit(self):
+        gyroChannel = 0  # analog input
+
+        self.left = wpilib.Spark(0)
+        self.right = wpilib.Spark(1)
+
+        self.gyro = ctre.PigeonIMU(gyroChannel)
+    
+        self.myRobot = wpilib.drive.DifferentialDrive(self.left, self.right)
+        self.myRobot.setExpiration(0.1)
+    
+        self.stick = wpilib.XboxController(0)
 
 def Vision():
     #Timer used to determine how many seconds it took to run vision helps with FPS
@@ -184,6 +202,8 @@ def Vision():
         global biggestX
         global biggestY
         global startTime
+        global ZDistance
+        global DirectDistanceBallInch
         biggest_radius = 0
         for i in circles[0,:]:
             try:
@@ -226,18 +246,7 @@ def Vision():
 
         ZDistance = DirectDistanceBallInch * math.cos((CameraMountingAngleRadians - YAngle))
         
-        
-        """
-        EXTREMELY OVERSIMPLIFIED psuedocode
 
-        if ZDistance>= some value
-        run the red path (hardcoded here)
-
-        else 
-        run blue path
-        """
-
-        
         #Calculate the relative end time which is NOW
         relativeEndTime = time.time()
         #Subtract to find how many seconds have passed since we found the start time
@@ -333,3 +342,30 @@ def Vision():
 while True:
     time.sleep(2)
     Vision()
+
+"""
+        EXTREMELY OVERSIMPLIFIED psuedocode
+
+        if ZDistance>= some value
+            run the red path(hardcoding function with instructions for robot, i.e direction to move in, turning degrees, etc.)
+
+        else 
+            run blue path
+"""
+
+
+# What the code would look like (Unifinished as of now)
+"""   
+def BluePath():
+    print("Bluepath")
+    
+def RedPath():
+    print("Redpath")
+
+
+if DirectDistanceBallInch>=180:#inches
+    BluePath()
+else:
+    RedPath()
+
+"""
